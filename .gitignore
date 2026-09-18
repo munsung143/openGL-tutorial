@@ -1,0 +1,9 @@
+**/x64/
+*.slnx
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.aps
+*.rc
+.vs
+/common/image
