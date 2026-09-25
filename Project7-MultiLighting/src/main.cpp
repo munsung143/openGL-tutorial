@@ -3,7 +3,7 @@
 #include <iostream>
 #include "shader.h"
 #include "texture.h"
-#include "cube.h"
+#include "gameobject.h"
 #include "camera.h"
 
 #include <glm/glm.hpp>
@@ -16,14 +16,21 @@
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
 void mouseCallback(GLFWwindow* window, double xpos, double ypos);
+void setUniforms_common(GameObject& object);
+void setUniforms_multiLight(GameObject& object);
 GLFWwindow* init();
 
+// Global
 float deltaTime = 0;
 float lastFrame = 0;
 
+CubeMesh cubeMesh;
+PlaneMesh planeMesh;
 Camera camera(glm::vec3(0, 0, 10));
-
-LightCube* cube;
+GameObject* lightCube;
+GameObject* plane;
+GameObject* cubes[3];
+LightProfile globalLight;
 
 int main() {
 	GLFWwindow* window = init();
@@ -31,39 +38,55 @@ int main() {
 	glfwSetCursorPosCallback(window, mouseCallback); // 콜백 등록
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); // 커서가 보이지 않도록 설정
 	glEnable(GL_DEPTH_TEST); // 깊이 테스트 활성화
-	cube = new LightCube(glm::vec3(0, 0, 0));
 
-	Shader shader(GLSL_PATH(multiLight.vs), GLSL_PATH(multiLight.fs));
+	Shader shader_multiLight(GLSL_PATH(multiLight.vs), GLSL_PATH(multiLight.fs));
+	Shader shader_common(GLSL_PATH(common.vs), GLSL_PATH(common.fs));
+
 	Texture texture0(IMAGE_PATH(container2.png), GL_RGBA);
 	Texture texture1(IMAGE_PATH(container_specular.png), GL_RGBA);
+	Texture texture2(IMAGE_PATH(container.jpg), GL_RGB);
+	Texture texture3(IMAGE_PATH(white.png), GL_RGBA);
 
+	for (int i = 0; i < 3; i++) {
+		cubes[i] = new GameObject((float*)cubeMesh.verticesData, (int*)cubeMesh.indices, sizeof(cubeMesh.verticesData), sizeof(cubeMesh.indices));
+		cubes[i]->SetShader(&shader_common, setUniforms_common);
+		cubes[i]->size = glm::vec3(0.2f, 0.2f, 0.2f);
+	}
+	lightCube = new GameObject((float*)cubeMesh.verticesData, (int*)cubeMesh.indices, sizeof(cubeMesh.verticesData), sizeof(cubeMesh.indices));
+	lightCube->SetShader(&shader_multiLight, setUniforms_multiLight);
+	plane = new GameObject((float*)planeMesh.verticesData, (int*)planeMesh.indices, sizeof(planeMesh.verticesData), sizeof(planeMesh.indices));
+	plane->SetShader(&shader_multiLight, setUniforms_multiLight);
+	
+	lightCube->material.diffuseTexture = &texture0;
+	lightCube->material.specularTexture = &texture1;
+	lightCube->position = glm::vec3(0, 2, 0);
+	
+	plane->material.diffuseTexture = &texture2;
+	plane->material.specularTexture = &texture3;
+	plane->size = glm::vec3(10, 1, 10);
+
+	cubes[0]->position = glm::vec3(0, 3, -2);
+	cubes[1]->position = glm::vec3(1.732f * 2, 3, 1);
+	cubes[2]->position = glm::vec3(-1.732f * 2, 3, 1);
+
+	cubes[0]->lightprofile.SetLightColor(glm::vec3(1, 0, 0));
+	cubes[1]->lightprofile.SetLightColor(glm::vec3(0, 1, 0));
+	cubes[2]->lightprofile.SetLightColor(glm::vec3(0, 0, 1));
+	cubes[0]->material.color = glm::vec3(1, 0, 0);
+
+	globalLight.SetLightColor(glm::vec3(1, 1, 0));
+	globalLight.spec = (glm::vec3(1, 1, 1));
 
 	while (!glfwWindowShouldClose(window)) {
 		processInput(window);
-		glClearColor(0, 0, 0, 1.0f);
+		glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		texture0.activeAndBind(GL_TEXTURE0); // 0번 유닛을 통한 텍스처 전달
-		texture1.activeAndBind(GL_TEXTURE1);
-
-		shader.use();
-		shader.setMat4("model", cube->getModel());
-		shader.setMat4("view", camera.GetLookAt());
-		shader.setMat4("projection", camera.GetProjection());
-
-		shader.setInt("material.diffuse", 0);
-		shader.setInt("material.specular", 1);
-		shader.setFloat("material.shininess", 32);
-
-
-		shader.setVec3("light.position", glm::vec3(3, 0, 3));
-		shader.setVec3("light.ambient", glm::vec3(0.2f, 0.2f, 0.2f));
-		shader.setVec3("light.diffuse", glm::vec3(1, 1, 1));
-		shader.setVec3("light.specular", glm::vec3(10, 10, 10));
-		shader.setVec3("viewPos", camera.position);
-
-
-		cube->Draw();
+		for (int i = 0; i < 3; i++) {
+			cubes[i]->Draw();
+		}
+		lightCube->Draw();
+		plane->Draw();
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
@@ -72,10 +95,60 @@ int main() {
 		float current = glfwGetTime();
 		deltaTime = current - lastFrame;
 		lastFrame = current;
+
+
+		glm::mat4 m = glm::mat4(1.0f); // 단위행렬 I
+		m = glm::rotate(m, deltaTime * 0.2f, glm::vec3(0.0, 0.0, 1.0));
+		globalLight.dir = m * glm::vec4(globalLight.dir, 1);
+		
+
+		
 	}
 
 	glfwTerminate();
 	return 0;
+}
+void setUniforms_common(GameObject& object) {
+	Shader* shader = object.shader;
+	shader->setMat4("model", object.getModel());
+	shader->setMat4("view", camera.GetLookAt());
+	shader->setMat4("projection", camera.GetProjection());
+	shader->setVec3("color", object.material.color);
+}
+void setUniforms_multiLight(GameObject& object) {
+	object.material.diffuseTexture->activeAndBind(GL_TEXTURE0);
+	object.material.specularTexture->activeAndBind(GL_TEXTURE1);
+	Shader* shader = object.shader;
+	shader->setMat4("model", object.getModel());
+	shader->setMat4("view", camera.GetLookAt());
+	shader->setMat4("projection", camera.GetProjection());
+	shader->setInt("material.diffuse", 0);
+	shader->setInt("material.specular", 1);
+	shader->setFloat("material.shininess", object.material.shininess);
+	shader->setVec3("viewPos", camera.position);
+
+	shader->setVec3("dirLight.dir", globalLight.dir);
+	shader->setVec3("dirLight.phn.amb", globalLight.amb);
+	shader->setVec3("dirLight.phn.diff", globalLight.diff);
+	shader->setVec3("dirLight.phn.spec", globalLight.spec);
+
+	for (int i = 0; i < 3; i++) {
+		std::string s = "spotLights[";
+		s = s + std::to_string(i) + "].";
+		shader->setVec3(s + "dir", cubes[i]->lightprofile.dir);
+		shader->setVec3(s + "pos", cubes[i]->position);
+		shader->setVec3(s + "phn.amb", cubes[i]->lightprofile.amb);
+		shader->setVec3(s + "phn.diff", cubes[i]->lightprofile.diff);
+		shader->setVec3(s + "phn.spec", cubes[i]->lightprofile.spec);
+		shader->setFloat(s + "att.constant", cubes[i]->lightprofile.constant);
+		shader->setFloat(s + "att.linear", cubes[i]->lightprofile.linear);
+		shader->setFloat(s + "att.quad", cubes[i]->lightprofile.quad);
+		//shader->setFloat(s + "att.constant", 1);
+		//shader->setFloat(s + "att.linear", 0);
+		//shader->setFloat(s + "att.quad", 0);
+		shader->setFloat(s + "inCutOff", glm::cos(glm::radians(cubes[i]->lightprofile.inCutOff)));
+		shader->setFloat(s + "outCutOff", glm::cos(glm::radians(cubes[i]->lightprofile.outCutOff)));
+	}
 }
 
 GLFWwindow* init() {
