@@ -56,8 +56,9 @@ vec3 CalcPhong(Phong phn, vec3 lightDir){
 
 	vec3 normal = normalize(Normal);
 	vec3 viewDir = normalize(viewPos - FragPos);
-	vec3 diffuseTexel = vec3(texture(material.diffuse, TexCoord));
-	vec3 specularTexel = vec3(texture(material.specular, TexCoord));
+	vec2 v = floor(TexCoord * 512.0) / 512.0 + 1.0 / 1024.0;
+	vec3 diffuseTexel = vec3(texture(material.diffuse, v));
+	vec3 specularTexel = vec3(texture(material.specular, v));
 
 	vec3 ambient = phn.amb * diffuseTexel;
 

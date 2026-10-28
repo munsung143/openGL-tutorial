@@ -9,16 +9,20 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include "MyLib.h"
 
 #define GLSL_PATH(file) "../common/GLSL/"#file
 #define IMAGE_PATH(file) "../common/image/"#file
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
-void processInput(GLFWwindow* window);
+void processInput();
 void mouseCallback(GLFWwindow* window, double xpos, double ypos);
 void setUniforms_common(GameObject& object);
 void setUniforms_multiLight(GameObject& object);
+void render();
 GLFWwindow* init();
+
+GLFWwindow* window;
 
 // Global
 float deltaTime = 0;
@@ -33,7 +37,7 @@ GameObject* cubes[3];
 LightProfile globalLight;
 
 int main() {
-	GLFWwindow* window = init();
+	window = init();
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback); // 콜백 등록
 	glfwSetCursorPosCallback(window, mouseCallback); // 콜백 등록
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); // 커서가 보이지 않도록 설정
@@ -41,6 +45,8 @@ int main() {
 
 	Shader shader_multiLight(GLSL_PATH(multiLight.vs), GLSL_PATH(multiLight.fs));
 	Shader shader_common(GLSL_PATH(common.vs), GLSL_PATH(common.fs));
+
+	std::cout << MyAdd(1, 2) << std::endl;
 
 	Texture texture0(IMAGE_PATH(container2.png), GL_RGBA);
 	Texture texture1(IMAGE_PATH(container_specular.png), GL_RGBA);
@@ -78,35 +84,35 @@ int main() {
 	globalLight.spec = (glm::vec3(1, 1, 1));
 
 	while (!glfwWindowShouldClose(window)) {
-		processInput(window);
-		glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-		for (int i = 0; i < 3; i++) {
-			cubes[i]->Draw();
-		}
-		lightCube->Draw();
-		plane->Draw();
-
-		glfwSwapBuffers(window);
-		glfwPollEvents();
-
-		// 델타타임 계산
-		float current = glfwGetTime();
-		deltaTime = current - lastFrame;
-		lastFrame = current;
-
-
-		glm::mat4 m = glm::mat4(1.0f); // 단위행렬 I
-		m = glm::rotate(m, deltaTime * 0.2f, glm::vec3(0.0, 0.0, 1.0));
-		globalLight.dir = m * glm::vec4(globalLight.dir, 1);
-		
-
-		
+		render();
 	}
 
 	glfwTerminate();
 	return 0;
+}
+void render() {
+	processInput();
+	glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	for (int i = 0; i < 3; i++) {
+		cubes[i]->Draw();
+	}
+	lightCube->Draw();
+	plane->Draw();
+
+	glfwSwapBuffers(window);
+	glfwPollEvents();
+
+	// 델타타임 계산
+	float current = glfwGetTime();
+	deltaTime = current - lastFrame;
+	lastFrame = current;
+
+
+	glm::mat4 m = glm::mat4(1.0f); // 단위행렬 I
+	m = glm::rotate(m, deltaTime * 0.2f, glm::vec3(0.0, 0.0, 1.0));
+	globalLight.dir = m * glm::vec4(globalLight.dir, 1);
 }
 void setUniforms_common(GameObject& object) {
 	Shader* shader = object.shader;
@@ -143,9 +149,6 @@ void setUniforms_multiLight(GameObject& object) {
 		shader->setFloat(s + "att.constant", cubes[i]->lightprofile.constant);
 		shader->setFloat(s + "att.linear", cubes[i]->lightprofile.linear);
 		shader->setFloat(s + "att.quad", cubes[i]->lightprofile.quad);
-		//shader->setFloat(s + "att.constant", 1);
-		//shader->setFloat(s + "att.linear", 0);
-		//shader->setFloat(s + "att.quad", 0);
 		shader->setFloat(s + "inCutOff", glm::cos(glm::radians(cubes[i]->lightprofile.inCutOff)));
 		shader->setFloat(s + "outCutOff", glm::cos(glm::radians(cubes[i]->lightprofile.outCutOff)));
 	}
@@ -175,6 +178,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
 	else {
 		glViewport(-((height - width) / 2), 0, height, height);
 	}
+	render();
 }
 
 bool ctrl = false;
@@ -196,7 +200,7 @@ bool O = false;
 bool toggleP = false;
 bool flagP = false;
 
-void processInput(GLFWwindow* window) {
+void processInput() {
 	ctrl = glfwGetKey(window, GLFW_KEY_LEFT_CONTROL);
 	alt = glfwGetKey(window, GLFW_KEY_LEFT_ALT);
 	shift = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT);
@@ -226,6 +230,14 @@ void processInput(GLFWwindow* window) {
 
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 		glfwSetWindowShouldClose(window, true);
+	}
+	if (glfwGetKey(window, GLFW_KEY_TAB) == GLFW_PRESS) {
+		if (glfwGetInputMode(window, GLFW_CURSOR) == GLFW_CURSOR_DISABLED) {
+			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+		}
+		else {
+			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+		}
 	}
 
 	camera.keyInput(deltaTime, shift, W, A, S, D);
